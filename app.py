@@ -25,22 +25,19 @@ def index():
 
         try:
 
-            # Search query
             query = request.form["content"].strip().replace(" ", "_")
 
-            # Create image folder
             save_dir = "image"
             os.makedirs(save_dir, exist_ok=True)
 
-            # Browser headers
             headers = {
-                "User-Agent":
-                "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
-                "AppleWebKit/537.36 (KHTML, like Gecko) "
-                "Chrome/124.0.0.0 Safari/537.36"
+                "User-Agent": (
+                    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+                    "AppleWebKit/537.36 (KHTML, like Gecko) "
+                    "Chrome/124.0.0.0 Safari/537.36"
+                )
             }
 
-            # Google Images URL
             url = f"https://www.google.com/search?tbm=isch&q={query}"
 
             response = requests.get(
@@ -51,7 +48,6 @@ def index():
 
             response.raise_for_status()
 
-            # Parse HTML
             soup = BeautifulSoup(
                 response.content,
                 "html.parser"
@@ -59,11 +55,9 @@ def index():
 
             images_tags = soup.find_all("img")
 
-            # Prevent IndexError
             if len(images_tags) <= 1:
                 return "No images found. Google may be blocking the scraper."
 
-            # Remove Google's logo image
             images_tags = images_tags[1:]
 
             img_data_mongo = []
@@ -110,7 +104,6 @@ def index():
             if not img_data_mongo:
                 return "No valid images found."
 
-            # MongoDB Connection
             mongo_uri = os.getenv(
                 "MONGO_URI",
                 "mongodb+srv://pwskills:pwskills@cluster0.9unxk7e.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0"
@@ -144,4 +137,3 @@ if __name__ == "__main__":
         host="0.0.0.0",
         port=8000
     )
-```
