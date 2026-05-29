@@ -62,8 +62,8 @@ def index():
 
                     return "image laoded"
                 except Exception as e:
-                    logging.info(e)
-                    return 'something is wrong'
+                    import traceback
+                    return f"<pre>{traceback.format_exc()}</pre>"
             # return render_template('results.html')
 
     else:
