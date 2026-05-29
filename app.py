@@ -1,9 +1,10 @@
 from flask import Flask, render_template, request
 import requests
 from bs4 import BeautifulSoup
-import logging
 import pymongo
+import logging
 import os
+import traceback
 
 logging.basicConfig(
     filename="scrapper.log",
@@ -25,7 +26,7 @@ def index():
 
         try:
 
-            query = request.form["content"].strip().replace(" ", "_")
+            query = request.form["content"].strip()
 
             save_dir = "image"
             os.makedirs(save_dir, exist_ok=True)
@@ -43,19 +44,31 @@ def index():
             response = requests.get(
                 url,
                 headers=headers,
-                timeout=10
+                timeout=15
             )
 
             response.raise_for_status()
 
             soup = BeautifulSoup(
-                response.content,
+                response.text,
                 "html.parser"
             )
 
-            images_tags = soup.find_all("img")
+            images = []
 
-           if len(images_tags) <= 1:
+            for img in soup.find_all("img"):
+
+                src = img.get("src")
+
+                if src and src.startswith("http"):
+                    images.append(src)
+
+            if len(images) == 0:
+
+                return """
+                Google is not returning image URLs.
+                Scraper is running correctly but Google is blocking requests.
+                """
 
             mongo_uri = os.getenv(
                 "MONGO_URI",
@@ -68,22 +81,9 @@ def index():
 
             collection = db["ayush_image_scrap"]
 
-            collection.insert_one({
-                "test": "mongodb working"
-            })
-
-            return "MongoDB working but Google blocked scraping"
-
-            images_tags = images_tags[1:]
-
             img_data_mongo = []
 
-            for idx, img in enumerate(images_tags):
-
-                image_url = img.get("src")
-
-                if not image_url:
-                    continue
+            for idx, image_url in enumerate(images):
 
                 try:
 
@@ -113,37 +113,31 @@ def index():
                     )
 
                 except Exception as img_error:
+
                     logging.warning(
-                        f"Image Download Error: {img_error}"
+                        f"Image download failed: {img_error}"
                     )
 
-            if not img_data_mongo:
-                return "No valid images found."
+            if img_data_mongo:
 
-            mongo_uri = os.getenv(
-                "MONGO_URI",
-                "mongodb+srv://pwskills:pwskills@cluster0.9unxk7e.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0"
-            )
-
-            client = pymongo.MongoClient(mongo_uri)
-
-            db = client["ayush_image_scrap"]
-
-            collection = db["ayush_image_scrap"]
-
-            collection.insert_many(img_data_mongo)
+                collection.insert_many(
+                    img_data_mongo
+                )
 
             client.close()
 
-            return f"{len(img_data_mongo)} images downloaded and stored successfully."
+            return (
+                f"{len(img_data_mongo)} images "
+                f"downloaded and stored successfully."
+            )
 
-        except Exception as e:
+        except Exception:
 
-            logging.exception("Application Error")
-
-            import traceback
-
-            return f"<pre>{traceback.format_exc()}</pre>"
+            return (
+                "<pre>" +
+                traceback.format_exc() +
+                "</pre>"
+            )
 
     return render_template("index.html")
 
