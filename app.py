@@ -56,7 +56,18 @@ def index():
             images_tags = soup.find_all("img")
 
             if len(images_tags) <= 1:
-                return "No images found. Google may be blocking the scraper."
+                
+                client = pymongo.MongoClient(mongo_uri)
+
+                db = client["ayush_image_scrap"]
+
+                collection = db["ayush_image_scrap"]
+
+                collection.insert_one({
+                    "test": "mongodb working"
+                })
+                
+                return "MongoDB working but Google blocked scraping"
 
             images_tags = images_tags[1:]
 
