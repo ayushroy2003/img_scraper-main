@@ -1,74 +1,148 @@
-from flask import Flask, render_template, request,jsonify
-from flask_cors import CORS,cross_origin
+```python
+from flask import Flask, render_template, request
 import requests
 from bs4 import BeautifulSoup
-from urllib.request import urlopen as uReq
 import logging
 import pymongo
-logging.basicConfig(filename="scrapper.log" , level=logging.INFO)
 import os
+
+logging.basicConfig(
+    filename="scrapper.log",
+    level=logging.INFO
+)
 
 app = Flask(__name__)
 
-@app.route("/", methods = ['GET'])
+
+@app.route("/", methods=["GET"])
 def homepage():
     return render_template("index.html")
 
-@app.route("/review" , methods = ['POST' , 'GET'])
+
+@app.route("/review", methods=["POST", "GET"])
 def index():
-    if request.method == 'POST':
+
+    if request.method == "POST":
+
+        try:
+
+            # Search query
+            query = request.form["content"].strip().replace(" ", "_")
+
+            # Create image folder
+            save_dir = "image"
+            os.makedirs(save_dir, exist_ok=True)
+
+            # Browser headers
+            headers = {
+                "User-Agent":
+                "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+                "AppleWebKit/537.36 (KHTML, like Gecko) "
+                "Chrome/124.0.0.0 Safari/537.36"
+            }
+
+            # Google Images URL
+            url = f"https://www.google.com/search?tbm=isch&q={query}"
+
+            response = requests.get(
+                url,
+                headers=headers,
+                timeout=10
+            )
+
+            response.raise_for_status()
+
+            # Parse HTML
+            soup = BeautifulSoup(
+                response.content,
+                "html.parser"
+            )
+
+            images_tags = soup.find_all("img")
+
+            # Prevent IndexError
+            if len(images_tags) <= 1:
+                return "No images found. Google may be blocking the scraper."
+
+            # Remove Google's logo image
+            images_tags = images_tags[1:]
+
+            img_data_mongo = []
+
+            for idx, img in enumerate(images_tags):
+
+                image_url = img.get("src")
+
+                if not image_url:
+                    continue
+
                 try:
 
-                    # query to search for images
-                    query = request.form['content'].replace(" ","")
+                    image_response = requests.get(
+                        image_url,
+                        timeout=10
+                    )
 
-                            # directory to store downloaded images
-                    save_dir = "image/"
-                    if not os.path.exists(save_dir):
-                          os.makedirs(save_dir)
+                    image_data = image_response.content
 
+                    filename = f"{query}_{idx}.jpg"
 
+                    filepath = os.path.join(
+                        save_dir,
+                        filename
+                    )
 
-                            # fake user agent to avoid getting blocked by Google
-                    
-                    headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/58.0.3029.110 Safari/537.36"}
-                            # fetch the search results page
-                    response = requests.get(f"https://www.google.com/search?q={query}&sca_esv=23275d10bb72eb94&sca_upv=1&udm=2&biw=1536&bih=695&sxsrf=ADLYWIIctTXENEZfoIRDbPZj02_eFB-v3g%3A1717955944430&ei=aO1lZvOBGorz4-EPvZ7h2A0&oq=faces+and+emot&gs_lp=Egxnd3Mtd2l6LXNlcnAiDmZhY2VzIGFuZCBlbW90KgIIADIFEAAYgAQyBRAAGIAEMgYQABgFGB4yBhAAGAgYHkj2T1CuCVijRnAJeACQAQGYAaoCoAGDHqoBBjAuMTguMrgBA8gBAPgBAZgCEqAC-hWoAgrCAgcQIxgnGOoCwgILEAAYgAQYsQMYgwHCAggQABiABBixA8ICChAAGIAEGEMYigXCAg0QABiABBixAxhDGIoFmAMHkgcINC4xMi4xLjGgB7ZG&sclient=gws-wiz-serp")
+                    with open(filepath, "wb") as f:
+                        f.write(image_data)
 
-                            # parse the HTML using BeautifulSoup
-                    soup = BeautifulSoup(response.content, "html.parser")
+                    img_data_mongo.append(
+                        {
+                            "query": query,
+                            "image_url": image_url,
+                            "filename": filename
+                        }
+                    )
 
-                            # find all img tags
-                    images_tags = soup.find_all("img")
+                except Exception as img_error:
+                    logging.warning(
+                        f"Image Download Error: {img_error}"
+                    )
 
-                            # download each image and save it to the specified directory
-                    del images_tags[0]
-                    img_data_mongo = []
-                    for i in images_tags:
-                            image_url = i['src']
-                            image_data = requests.get(image_url).content
-                            mydict = {"index": image_url , "image":image_data}
-                            img_data_mongo.append(mydict)
-                            with open(os.path.join(save_dir,f"{query}_{images_tags.index(i)}.jpg"),"wb") as f :
-                                    f.write(image_data)
+            if not img_data_mongo:
+                return "No valid images found."
 
+            # MongoDB Connection
+            mongo_uri = os.getenv(
+                "MONGO_URI",
+                "mongodb+srv://pwskills:pwskills@cluster0.9unxk7e.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0"
+            )
 
-    
-                    
-                    client = pymongo.MongoClient("mongodb+srv://pwskills:pwskills@cluster0.9unxk7e.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0")
-                    db = client['ayush_image_scrap']
-                    coll_image = db["ayush_image_scrap"]
-                    coll_image.insert_many(img_data_mongo)          
+            client = pymongo.MongoClient(mongo_uri)
 
-                    return "image laoded"
-                except Exception as e:
-                    import traceback
-                    return f"<pre>{traceback.format_exc()}</pre>"
-            # return render_template('results.html')
+            db = client["ayush_image_scrap"]
 
-    else:
-        return render_template('index.html')
+            collection = db["ayush_image_scrap"]
+
+            collection.insert_many(img_data_mongo)
+
+            client.close()
+
+            return f"{len(img_data_mongo)} images downloaded and stored successfully."
+
+        except Exception as e:
+
+            logging.exception("Application Error")
+
+            import traceback
+
+            return f"<pre>{traceback.format_exc()}</pre>"
+
+    return render_template("index.html")
 
 
 if __name__ == "__main__":
-    app.run(host='0.0.0.0', port=8000)
+    app.run(
+        host="0.0.0.0",
+        port=8000
+    )
+```
