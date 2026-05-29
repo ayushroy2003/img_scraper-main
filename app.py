@@ -55,19 +55,24 @@ def index():
 
             images_tags = soup.find_all("img")
 
-            if len(images_tags) <= 1:
-                
-                client = pymongo.MongoClient(mongo_uri)
+           if len(images_tags) <= 1:
 
-                db = client["ayush_image_scrap"]
+            mongo_uri = os.getenv(
+                "MONGO_URI",
+                "mongodb+srv://pwskills:pwskills@cluster0.9unxk7e.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0"
+            )
 
-                collection = db["ayush_image_scrap"]
+            client = pymongo.MongoClient(mongo_uri)
 
-                collection.insert_one({
-                    "test": "mongodb working"
-                })
-                
-                return "MongoDB working but Google blocked scraping"
+            db = client["ayush_image_scrap"]
+
+            collection = db["ayush_image_scrap"]
+
+            collection.insert_one({
+                "test": "mongodb working"
+            })
+
+            return "MongoDB working but Google blocked scraping"
 
             images_tags = images_tags[1:]
 
